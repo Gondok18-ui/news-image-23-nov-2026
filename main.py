@@ -34,7 +34,13 @@ FLAME_O = (232, 122, 32)
 FLAME_R = (196, 52, 36)
 BLACK = (16, 15, 13)
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
 FONT_DIRS = [
+    # the fonts bundled with the entry come first: the grading image may
+    # have no usable system fonts at all, and bundled-first also makes
+    # the local and graded renders identical
+    os.path.join(_HERE, "fonts"),
     "/usr/share/fonts/truetype/liberation",
     "/usr/share/fonts/truetype/dejavu",
     "/usr/share/fonts",
@@ -56,17 +62,49 @@ FONT_FALLBACK = {
 }
 
 
+_FONT_CACHE = []
+
+
 def font(style, size):
-    """Load a TrueType font by style name, with graceful fallbacks."""
+    """Load a TrueType font by style name, with graceful fallbacks.
+
+    Never raises: if every font file is missing and even Pillow's
+    built-in default font cannot load (newer Pillow can raise there
+    instead of returning the bitmap font), fall back to a font that was
+    already loaded, so the page still draws.
+    """
     for name in (FONT_FILES[style], FONT_FALLBACK[style]):
         for d in FONT_DIRS:
             p = os.path.join(d, name)
             if os.path.exists(p):
                 try:
-                    return ImageFont.truetype(p, size)
-                except OSError:
+                    f = ImageFont.truetype(p, size)
+                    _FONT_CACHE.append(f)
+                    return f
+                except Exception:
                     pass
-    return ImageFont.load_default()
+    try:
+        return ImageFont.load_default()
+    except Exception:
+        pass
+    if _FONT_CACHE:
+        return _FONT_CACHE[0]
+    # last resort: any TrueType file in any searched directory
+    for d in FONT_DIRS:
+        try:
+            names = sorted(os.listdir(d))
+        except OSError:
+            continue
+        for name in names:
+            if name.lower().endswith(".ttf"):
+                try:
+                    return ImageFont.truetype(os.path.join(d, name), size)
+                except Exception:
+                    pass
+    try:
+        return ImageFont.load_default()
+    except Exception:
+        return _FONT_CACHE[0] if _FONT_CACHE else None
 
 
 # ---------------------------------------------------------------- helpers
@@ -318,26 +356,29 @@ def build():
 
 def main():
     img = build()
-    targets = []
+    here = os.path.dirname(os.path.abspath(__file__))
     env_dir = os.environ.get("MAKEFUN_OUTPUT_DIR")
     if env_dir:
-        targets.append(os.path.join(env_dir, "entry.png"))
+        primary = os.path.join(env_dir, "entry.png")
     elif os.path.isdir("/output"):
-        targets.append("/output/entry.png")
+        primary = "/output/entry.png"
     else:
-        targets.append(os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "entry.png"))
-    if not env_dir:
-        # a local run also leaves the picture beside the program
-        local = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             "entry.png")
-        if local not in targets:
-            targets.append(local)
-    for path in targets:
-        d = os.path.dirname(path)
-        if d:
-            os.makedirs(d, exist_ok=True)
-        img.save(path, "PNG", optimize=True)
+        primary = os.path.join(here, "entry.png")
+    # the harness target is written first, and it is the only write
+    # whose failure may fail the run
+    d = os.path.dirname(primary)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    img.save(primary, "PNG", optimize=True)
+    # a copy beside the program is a local convenience only: in the
+    # grader the repository directory is read-only, so this write is
+    # best-effort and must never fail the run
+    local = os.path.join(here, "entry.png")
+    if os.path.abspath(local) != os.path.abspath(primary):
+        try:
+            img.save(local, "PNG", optimize=True)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
