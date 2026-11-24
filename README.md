@@ -8,6 +8,19 @@ An original broadsheet newspaper front page, drawn entirely in code, that
 sums up the world news of Monday 23 November 2026 in a single 1024×1024
 image.
 
+## Repository layout
+
+- **`entry.png`** — the judged image itself: the finished front page,
+  1024×1024, held in the repository.
+- **`generate.py`** — the generator that drew `entry.png` (Python 3,
+  Pillow only). It was run during development to produce the image and
+  is kept here for provenance and reproduction; running it again
+  regenerates the same PNG byte for byte.
+- **`main.ts`** — the program the make.fun harness runs. It uses only
+  the Node 22 standard library: it resolves the output directory
+  (`$MAKEFUN_OUTPUT_DIR`, defaulting to `/output`), creates it if
+  needed, and copies `entry.png` into it.
+
 ## What the page shows
 
 - **Masthead** — *The Daily Meridian*, with the date line
